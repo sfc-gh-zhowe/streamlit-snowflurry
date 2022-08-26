@@ -22,9 +22,11 @@ This repository contains steps to set up a container image containing [Streamlit
  - Snowflurry is designed to help size a (multicluster) warehouse for a workload.  It allows the user to set various parameters, runs sample workloads, and collects the results.
  -  For example, a warehouse that will be used to support a multiple user dashboard:  There will be a number of concurrent, similar queries sent to the warehouse, and using the ideal size and MCW count will ensure adequate response times for the users.
 
- - NOTE:  During testing the warehouse selected will be resized/stopped/started.  It should only be used by the SnowFlurry testing, to ensure accurate results.  Other work running against it could prevent/delay resizing and scaling.
+ ### NOTE:  During testing the warehouse selected will be resized/stopped/started.  It should only be used by the SnowFlurry testing, to ensure accurate results.  Other work running against it could prevent/delay resizing and scaling.
 
 ## Inputs
+- Iterations:  How many queries will be sent to the database at one time (asyncronously).  This will essentially use the SQL file multiple times, to create enough queries.
+
 - Sql File: Create a SQL file with a representative sample of the types of queries that will be executing on the warehouse.  The more actual use cases covered, the better.  The number of queries does not matter, as the iterations parameter will allow the file yo but used multiple times, to simulate many users.
 
 - Warehouse size: Start small, execute your script with a given (small) iterations.  The results (recommend you copy/paste into excel to collect the various runs) wiil include information at the cluster level (recommend starting at 1:1), and totals.  The statistics collected are min/max/sum/avg of:  Rows returned, bytes scanned, compile time, queue time, execution time, and elapsed (combined of the others) times.
