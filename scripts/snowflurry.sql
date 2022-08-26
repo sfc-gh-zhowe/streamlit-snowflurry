@@ -1,0 +1,10 @@
+select c_customer_sk, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_customer_id, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_current_cdemo_sk, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_current_hdemo_sk, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_current_addr_sk, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_first_shipto_date_sk, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_first_sales_date_sk, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_salutation, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_first_name, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;
+select c_last_name, count(*) from sample_data.tpcds_sf100tcl.customer group by 1;

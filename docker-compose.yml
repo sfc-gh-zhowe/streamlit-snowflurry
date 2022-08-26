@@ -1,0 +1,12 @@
+version: '2'
+services:
+  snowflurry:
+    container_name: snowflurry
+    build: .
+    environment:
+      - SNOWFLURRY_CONFIG_FILE=/secrets/snowflurry.json
+    volumes:
+      - ./secrets:/secrets
+      - ./scripts:/scripts
+    ports:
+      - 8501:8501
