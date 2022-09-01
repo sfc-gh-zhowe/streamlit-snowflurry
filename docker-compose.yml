@@ -4,9 +4,11 @@ services:
     container_name: snowflurry
     build: .
     environment:
+      - IN_DOCKER=True
       - SNOWFLURRY_CONFIG_FILE=/secrets/snowflurry.json
     volumes:
       - ./secrets:/secrets
-      - ./scripts:/scripts
+      - ./scripts:/app/scripts
+      - ./excel:/excel
     ports:
       - 8501:8501
