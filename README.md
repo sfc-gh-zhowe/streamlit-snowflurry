@@ -18,7 +18,9 @@ This repository contains steps to set up a container image containing [Streamlit
 ## Stopping the container
 - Run `docker compose down`
 
-### It should also be possible to run directly as a streamlit app, It would be best to be in a anaconda/virtual python environment.  Install the packages based on the Dockerfile PIP commands, and it should be good to go.
+### It should also be possible to run directly as a streamlit app, 
+- It would be best to be in a anaconda/virtual python environment.  
+- Install the packages based on the Dockerfile PIP commands, and it should be good to go.
 
 # What SnowFlurry is/does:
  - Snowflurry is designed to help size a (multicluster) warehouse for a workload.  It allows the user to set various parameters, runs sample workloads, and collects the results.
