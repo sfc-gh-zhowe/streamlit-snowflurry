@@ -112,7 +112,7 @@ def TestConnection():
  else:
   st.session_state['connection'] = 'Connection Succeeded'
 
-def ExecuteMain():
+def ExecuteMain(con):
  ClearDataFrame()
  args = st.session_state
  warehouse = args['Warehouse']
@@ -122,7 +122,6 @@ def ExecuteMain():
   mult = ceil(iterations/len(sqlList))
   sqlList = (sqlList * mult)[0:iterations]
 
-  con = ConnectSnowflake()
   queryTag = ConfigureWarehouse(con, warehouse)
   startTime = time.time()
   ExecuteQueries(con, sqlList)
@@ -130,7 +129,6 @@ def ExecuteMain():
   ResetWarehouse(con, warehouse)
   CollectResults(con, queryTag, endTime-startTime, args['DetailedResults'])
   SuspendWarehouse(con, warehouse)
-  con.close()
  except Exception as err:
   OutputException(err)
   if (con):
@@ -147,10 +145,12 @@ def ConfigureWarehouse(con, warehouse):
   cur = con.cursor()
   cur.execute('ALTER SESSION UNSET QUERY_TAG')
   SuspendWarehouse(con, warehouse)
-  cur.execute(f'ALTER WAREHOUSE {warehouse} SET WAREHOUSE_SIZE = {args["WarehouseSize"]} MIN_CLUSTER_COUNT = {min(args["Mcw"])} MAX_CLUSTER_COUNT = {max(args["Mcw"])}')
+  alterStatement = f'ALTER WAREHOUSE {warehouse} SET WAREHOUSE_SIZE = {args["WarehouseSize"]} MIN_CLUSTER_COUNT = {min(args["Mcw"])} MAX_CLUSTER_COUNT = {max(args["Mcw"])} MAX_CONCURRENCY_LEVEL = {args["MaxConcurrencyLevel"]}'
+  print(alterStatement)
+  cur.execute(alterStatement)
   cur.execute(f'ALTER WAREHOUSE {warehouse} RESUME')
   timeString = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-  queryTag = f'{timeString}_{args["Iterations"]}_{args["WarehouseSize"]}_{min(args["Mcw"])}_{max(args["Mcw"])}_{"RC_" if args["ResultSetCache"] else ""}{args["QueryTag"]}'
+  queryTag = f'{timeString}_{args["Iterations"]}_{args["WarehouseSize"]}_{min(args["Mcw"])}_{max(args["Mcw"])}_{args["MaxConcurrencyLevel"]}_{"RC_" if args["ResultSetCache"] else ""}{args["QueryTag"]}'
   cur.execute(f'ALTER SESSION SET QUERY_TAG = "{queryTag}"')
   return queryTag
  except Exception as err:
@@ -160,7 +160,7 @@ def ConfigureWarehouse(con, warehouse):
 def ResetWarehouse(con, warehouse):
   cur = con.cursor()
   cur.execute('ALTER SESSION UNSET QUERY_TAG')
-  cur.execute(f'ALTER WAREHOUSE {warehouse} SET WAREHOUSE_SIZE = XSMALL MIN_CLUSTER_COUNT = 1 MAX_CLUSTER_COUNT = 1')
+  cur.execute(f'ALTER WAREHOUSE {warehouse} SET WAREHOUSE_SIZE = XSMALL MIN_CLUSTER_COUNT = 1 MAX_CLUSTER_COUNT = 1 MAX_CONCURRENCY_LEVEL = 8')
 
 def SuspendWarehouse(con, warehouse):
  try:
@@ -195,6 +195,7 @@ def CollectResults(con, queryTag, elapsedTime, detailedResults=False):
   dfSummary = cur.fetch_pandas_all()
   tagIndex = queryTag.index('_', queryTag.index('_')+1)
   tag = f"{queryTag[:tagIndex]}\r\n{queryTag[tagIndex + 1:]}\r\nElapsed: {elapsedTime:9.3f}"
+  print(tag)
   idx = dfSummary.index[dfSummary['CLUSTER_NUMBER'] == '-ALL-'].tolist()
   dfSummary.at[idx[0], 'CLUSTER_NUMBER'] = tag
   dfSummary = dfSummary.astype({
@@ -218,6 +219,7 @@ def CollectResults(con, queryTag, elapsedTime, detailedResults=False):
   cur.close()
 
 def OutputException(exception):
+ print("EXCEPTION OCCURED")
  print(exception)
  st.session_state['exception'] = exception
 
@@ -301,6 +303,7 @@ def main():
   st.text_input('Warehouse Name', key='Warehouse', help='The Warehouse that will be used for testing.  Should not be used by anyone else, as we will be sizing/starting/stopping it!', placeholder='SNOWFLURRY_WH', disabled=inputsDisabled)
   st.selectbox('Warehouse Size', WAREHOUSE_SIZES, key='WarehouseSize', help='Warehouse size for a given test', disabled=inputsDisabled)
   st.slider('MCW Size', min(MCW_SIZE_RANGE), max(MCW_SIZE_RANGE), key='Mcw', help='Set Min and Max Multicluster Warehouse sizes', disabled=inputsDisabled)
+  st.number_input('Max Concurrency Level', key="MaxConcurrencyLevel", help="Max Concurrency Level Default for Warehouse", disabled=inputsDisabled, min_value=1, max_value=12)
   st.checkbox('ResultSet Cache', key='ResultSetCache', help='If checked, Snowflake ResultSet Caching will be enabled', disabled=inputsDisabled)
  with col2.expander("Query", True):
   st.text_input('Query Tag', key='QueryTag', help='QueryTag base attached to all test queries', placeholder='Snowflurry', disabled=inputsDisabled)
@@ -315,9 +318,14 @@ def main():
 
  if executeMain:
   if ValidateInputs(True):
-   st.snow()
-   with st.spinner():
-    ExecuteMain()
+    try:
+     con = ConnectSnowflake()
+     st.snow()
+     with st.spinner():
+      ExecuteMain(con)
+      con.close()
+    except Exception as err:
+     OutputException(err)
 
   EnableInputs()
 
