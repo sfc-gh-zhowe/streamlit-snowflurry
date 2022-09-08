@@ -98,6 +98,8 @@ def ReadSqlFile(fileName):
  return [i.strip() for i in data.split(';') if i.strip()]
 
 def ClearDataFrame():
+ if ('exception' in st.session_state):
+  del st.session_state['exception']
  if ('dfSummary' in st.session_state):
   del st.session_state['dfSummary']
  if ('dfDetail' in st.session_state):
@@ -194,7 +196,7 @@ def CollectResults(con, queryTag, elapsedTime, detailedResults=False):
   cur.execute(SUMMARY_QUERY_SQL.format(queryTag=queryTag))
   dfSummary = cur.fetch_pandas_all()
   tagIndex = queryTag.index('_', queryTag.index('_')+1)
-  tag = f"{queryTag[:tagIndex]}\r\n{queryTag[tagIndex + 1:]}\r\nElapsed: {elapsedTime:9.3f}"
+  tag = f"{queryTag[:tagIndex]} \r\n{queryTag[tagIndex + 1:]}\r\nElapsed: {elapsedTime:9.3f}"
   print(tag)
   idx = dfSummary.index[dfSummary['CLUSTER_NUMBER'] == '-ALL-'].tolist()
   dfSummary.at[idx[0], 'CLUSTER_NUMBER'] = tag
@@ -261,8 +263,7 @@ def ValidateInputs(validateForExecute):
 def DisplayDataFrames():
  DisplayDataFrame('dfSummary')
  DisplayDataFrame('dfDetail')
- if IN_DOCKER:
-  st.button('Save As Excel File', on_click=ExcelResults)
+ st.button('Save As Excel File', on_click=ExcelResults)
 
 def DisplayDataFrame(dfName):
  if (dfName in st.session_state):
