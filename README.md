@@ -10,6 +10,9 @@ This repository contains steps to set up a container image containing [Streamlit
 - Update `snowflurry.json` file in `./secrets` folder with connection information, or fill it in dynamically at run-time.
 - currently key-pair authentication is not supported....
 
+## (re)Building the container
+- Run `docker compose build` to build/rebuild the container
+
 ## Starting the container
 - Run `docker compose up -d` to start the container which in turn will start the `streamlit` server
 - Run `docker compose logs` to print the connection URL containing the **token**
