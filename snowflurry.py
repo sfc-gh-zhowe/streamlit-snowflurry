@@ -48,7 +48,7 @@ FROM qh GROUP BY CLUSTER_NUMBER ORDER BY CLUSTER_NUMBER
 """
 DETAIL_QUERY_SQL = """
 SELECT *
-FROM table(information_schema.query_history_by_session(RESULT_LIMIT => 10000)) 
+FROM table(information_schema.query_history_by_user(USER_NAME => '{userName}', RESULT_LIMIT => 10000)) 
 WHERE QUERY_TYPE = 'SELECT' AND QUERY_TAG = '{queryTag}'
 """
 
@@ -152,7 +152,9 @@ def ConnectSnowflake():
  args = st.session_state
  if (DEBUG):
   print(args)
- con =  snowflake.connector.connect(user=args['User'], password=args['Password'], account=args['Account'], role=args['Role'], warehouse=args['Warehouse'], database=args['Database'], schema=args['Schema'], session_parameters={'USE_CACHED_RESULT': args['ResultSetCache']})
+ con =  snowflake.connector.connect(user=args['User'], password=args['Password'], account=args['Account'], role=args['Role'], 
+                                    warehouse=args['Warehouse'], database=args['Database'], schema=args['Schema'], 
+                                    authenticator=args['Authenticator'], session_parameters={'USE_CACHED_RESULT': args['ResultSetCache']})
  return con
    
 def ConfigureWarehouse(con, warehouse):
@@ -164,10 +166,13 @@ def ConfigureWarehouse(con, warehouse):
   alterStatement = f'ALTER WAREHOUSE {warehouse} SET WAREHOUSE_SIZE = {args["WarehouseSize"]} MIN_CLUSTER_COUNT = {min(args["Mcw"])} MAX_CLUSTER_COUNT = {max(args["Mcw"])} MAX_CONCURRENCY_LEVEL = {args["MaxConcurrencyLevel"]}'
   print(alterStatement)
   cur.execute(alterStatement)
-  cur.execute(f'ALTER WAREHOUSE {warehouse} RESUME')
   timeString = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
   queryTag = f'{timeString}_{args["Iterations"]}_{args["WarehouseSize"]}_{min(args["Mcw"])}_{max(args["Mcw"])}_{args["MaxConcurrencyLevel"]}_{"RC_" if args["ResultSetCache"] else ""}{args["QueryTag"]}'
   cur.execute(f'ALTER SESSION SET QUERY_TAG = "{queryTag}"')
+
+  if (args['SecondaryRoles']):
+   cur.execute('USE SECONDARY ROLES ALL')
+  cur.execute(f'ALTER WAREHOUSE {warehouse} RESUME')
   return queryTag
  except Exception as err:
   OutputException(err)
@@ -208,7 +213,7 @@ def CollectResults(con, queryTag, elapsedTime, detailedResults=False):
  try:
   cur = con.cursor()
   args = st.session_state
-  cur.execute(SUMMARY_QUERY_SQL.format(queryTag=queryTag, userName=args['User']))
+  cur.execute(SUMMARY_QUERY_SQL.format(userName=args['User'], queryTag=queryTag))
   dfSummary = cur.fetch_pandas_all()
   tagIndex = queryTag.index('_', queryTag.index('_')+1)
   tag = f"{queryTag[:tagIndex]} \r\n{queryTag[tagIndex + 1:]}\r\nElapsed: {elapsedTime:9.3f}"
@@ -226,7 +231,7 @@ def CollectResults(con, queryTag, elapsedTime, detailedResults=False):
   st.session_state['fileName'] = queryTag + '.xlsx'
 
   if (detailedResults):
-   cur.execute(DETAIL_QUERY_SQL.format(queryTag=queryTag))
+   cur.execute(DETAIL_QUERY_SQL.format(userName=args['User'], queryTag=queryTag))
    dfDetail = cur.fetch_pandas_all()
    st.session_state['dfDetail'] = dfDetail
 
@@ -276,7 +281,9 @@ def ValidateInputs(validateForExecute):
  return True
 
 def DisplayDataFrames():
- if (DisplayDataFrame('dfSummary') or  DisplayDataFrame('dfDetail')):
+ hasSummary = DisplayDataFrame('dfSummary')
+ hasDetail = DisplayDataFrame('dfDetail')
+ if (hasSummary or hasDetail):
   st.button('Save As Excel File', on_click=ExcelResults)
 
 def DisplayDataFrame(dfName):
@@ -304,12 +311,14 @@ def main():
 
  col1, col2 = st.columns(2)
  with col1.expander("Log-in", True):
+  st.selectbox('Authenticator', ('Snowflake', 'ExternalBrowser'), key='Authenticator', help='Use Snowflake User/Password or ExternalBrowser (SSO)', disabled=inputsDisabled)
   st.text_input('Account', key='Account', help="Snowflake Account Identifier", placeholder='snowflake_account', disabled=inputsDisabled)
   st.text_input('User', key='User', help='Username', placeholder='User', disabled=inputsDisabled)
   st.text_input('Password', key='Password', type='password', help='Password', placeholder='Password', disabled=inputsDisabled)
   st.text_input('Database', key='Database', help='Default Database Name.  A database that the User has USAGE on.  Needed to access information_schema functions', placeholder="Database", disabled=inputsDisabled)
   st.text_input('Schema', key='Schema', help='Default Schema', placeholder='public', disabled=inputsDisabled)
   st.text_input('Role', key='Role', help='Default Role.  Must have access to run all queries to be tested, as well as resize/start/suspend the Warehouse', placeholder='Role', disabled=inputsDisabled)
+  st.checkbox('Use Scondary Roles', key='SecondaryRoles', help='If checked, Will USE SECONDARY ROLES ALL, otherwise uses default for user', disabled=inputsDisabled)
   testConnection = st.button('Test Connection', disabled=inputsDisabled, on_click=DisableInputs)
   if ('connection' in st.session_state):
    st.write(st.session_state['connection'])
