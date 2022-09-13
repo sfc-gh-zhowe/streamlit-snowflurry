@@ -9,6 +9,8 @@ import snowflake.connector
 from snowflake.connector import ProgrammingError
 from math import ceil
 
+DEBUG = True
+
 WAREHOUSE_SIZES = ('XSMALL', 'SMALL', 'MEDIUM', 'LARGE', 'XLARGE', 'XXLARGE', 'XXXLARGE', 'X4LARGE', 'X5LARGE', 'X6LARGE')
 MCW_SIZE_RANGE = (1, 10)
 
@@ -18,10 +20,11 @@ EXCEL_PATH = '/excel/' if IN_DOCKER else './excel/'
 
 SUMMARY_QUERY_SQL = """
 WITH qh AS (SELECT CLUSTER_NUMBER, TOTAL_ELAPSED_TIME / 1000 AS ELAPSED_SECONDS, ROWS_PRODUCED AS QRY_ROWS, BYTES_SCANNED / POW(2,20) MB_SCANNED
- , COMPILATION_TIME / 1000 AS COMPILATION_SECONDS, EXECUTION_TIME / 1000 AS EXECUTION_SECONDS, TRANSACTION_BLOCKED_TIME / 1000 AS BLOCKED_SECONDS, (QUEUED_PROVISIONING_TIME+QUEUED_REPAIR_TIME+QUEUED_OVERLOAD_TIME) / 1000 AS QUEUED_SECONDS
+ , COMPILATION_TIME / 1000 AS COMPILATION_SECONDS, EXECUTION_TIME / 1000 AS EXECUTION_SECONDS, TRANSACTION_BLOCKED_TIME / 1000 AS BLOCKED_SECONDS
+ , (QUEUED_PROVISIONING_TIME+QUEUED_REPAIR_TIME+QUEUED_OVERLOAD_TIME) / 1000 AS QUEUED_SECONDS
  , PERCENTILE_CONT(0.95) WITHIN GROUP(ORDER BY EXECUTION_SECONDS) OVER (PARTITION BY CLUSTER_NUMBER) AS P95_EXECUTION
  , PERCENTILE_CONT(0.95) WITHIN GROUP(ORDER BY ELAPSED_SECONDS) OVER (PARTITION BY CLUSTER_NUMBER) AS P95_ELAPSED
- FROM table(information_schema.query_history_by_session(RESULT_LIMIT => 10000)) 
+ FROM table(information_schema.query_history_by_user(USER_NAME => '{userName}', RESULT_LIMIT => 10000)) 
  WHERE QUERY_TYPE = 'SELECT' AND QUERY_TAG = '{queryTag}')
 SELECT '-ALL-' AS CLUSTER_NUMBER, COUNT(*) AS QRY_COUNT
 , MIN(QRY_ROWS) AS MIN_ROWS, MAX(QRY_ROWS) AS MAX_ROWS, SUM(QRY_ROWS) AS SUM_ROWS, ROUND(AVG(QRY_ROWS), 0) AS AVG_ROWS
@@ -93,7 +96,7 @@ def ExportConfig():
   json.dump(data, jsonFile)
 
 def ReadSqlFile(fileName):
- with open('./scripts/'+fileName, 'r') as sqlFile:
+ with open('./scripts/'+fileName, 'r', encoding='UTF8') as sqlFile:
     data = sqlFile.read()
  return [i.strip() for i in data.split(';') if i.strip()]
 
@@ -139,7 +142,10 @@ def ExecuteMain(con):
 
 def ConnectSnowflake():
  args = st.session_state
- return snowflake.connector.connect(user=args['User'], password=args['Password'], account=args['Account'], role=args['Role'], warehouse=args['Warehouse'], database=args['Database'], schema=args['Schema'], session_parameters={'USE_CACHED_RESULT': args['ResultSetCache']})
+ if (DEBUG):
+  print(args)
+ con =  snowflake.connector.connect(user=args['User'], password=args['Password'], account=args['Account'], role=args['Role'], warehouse=args['Warehouse'], database=args['Database'], schema=args['Schema'], session_parameters={'USE_CACHED_RESULT': args['ResultSetCache']})
+ return con
    
 def ConfigureWarehouse(con, warehouse):
  try:
@@ -193,7 +199,8 @@ def ExecuteQueries(con, sqlList):
 def CollectResults(con, queryTag, elapsedTime, detailedResults=False):
  try:
   cur = con.cursor()
-  cur.execute(SUMMARY_QUERY_SQL.format(queryTag=queryTag))
+  args = st.session_state
+  cur.execute(SUMMARY_QUERY_SQL.format(queryTag=queryTag, userName=args['User']))
   dfSummary = cur.fetch_pandas_all()
   tagIndex = queryTag.index('_', queryTag.index('_')+1)
   tag = f"{queryTag[:tagIndex]} \r\n{queryTag[tagIndex + 1:]}\r\nElapsed: {elapsedTime:9.3f}"
@@ -261,17 +268,18 @@ def ValidateInputs(validateForExecute):
  return True
 
 def DisplayDataFrames():
- DisplayDataFrame('dfSummary')
- DisplayDataFrame('dfDetail')
- st.button('Save As Excel File', on_click=ExcelResults)
+ if (DisplayDataFrame('dfSummary') or  DisplayDataFrame('dfDetail')):
+  st.button('Save As Excel File', on_click=ExcelResults)
 
 def DisplayDataFrame(dfName):
- if (dfName in st.session_state):
+ hasDataFrame = dfName in st.session_state 
+ if (hasDataFrame):
   st.write(st.session_state[dfName])
 
   if not IN_DOCKER:
    st.button('Copy to Clipboard', on_click=ClipboardResults, key='btn_'+dfName, kwargs={'dataframe': dfName})
-
+  
+ return hasDataFrame
 
 def main():
  if 'inputsDisabled' not in st.session_state:
@@ -321,6 +329,8 @@ def main():
   if ValidateInputs(True):
     try:
      con = ConnectSnowflake()
+     if (not con):
+      print('NO CONNECTION')
      st.snow()
      with st.spinner():
       ExecuteMain(con)
