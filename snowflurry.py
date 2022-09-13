@@ -98,7 +98,12 @@ def ExportConfig():
 def ReadSqlFile(fileName):
  with open('./scripts/'+fileName, 'r', encoding='UTF8') as sqlFile:
     data = sqlFile.read()
- return [i.strip() for i in data.split(';') if i.strip()]
+
+ import re
+ sqls = re.split(r';$', data, flags = re.MULTILINE)
+ sqls = [i.strip() for i in sqls if i.strip()]
+ print('sqls: ' + str(len(sqls)))
+ return sqls
 
 def ClearDataFrame():
  if ('exception' in st.session_state):
@@ -123,10 +128,13 @@ def ExecuteMain(con):
  warehouse = args['Warehouse']
  try:
   sqlList = ReadSqlFile(args['SqlFile'])
-  iterations = args['Iterations']
+  multiplier = len(sqlList) if args['IterateBy'] == 'File' else 1
+  iterations = args['Iterations'] * multiplier
   mult = ceil(iterations/len(sqlList))
   sqlList = (sqlList * mult)[0:iterations]
 
+  if (DEBUG):
+   print('sqlList set to ' + str(len(sqlList)) + ' queries')
   queryTag = ConfigureWarehouse(con, warehouse)
   startTime = time.time()
   ExecuteQueries(con, sqlList)
@@ -189,10 +197,10 @@ def ExecuteQueries(con, sqlList):
  
  runningList = queryIdList.copy()
  while len(runningList) > 0:
-  time.sleep(1)
-  runningList = [id for id in queryIdList if con.is_still_running(con.get_query_status(id))]
-  print('running:')
+#  time.sleep(1)
+  print('Running: ' + str(len(runningList)))
   print(runningList)
+  runningList = [id for id in queryIdList if con.is_still_running(con.get_query_status(id))]
   percentComplete = (len(queryIdList)-len(runningList))/len(queryIdList)
   progressBar.progress(percentComplete)
 
@@ -316,6 +324,7 @@ def main():
   st.checkbox('ResultSet Cache', key='ResultSetCache', help='If checked, Snowflake ResultSet Caching will be enabled', disabled=inputsDisabled)
  with col2.expander("Query", True):
   st.text_input('Query Tag', key='QueryTag', help='QueryTag base attached to all test queries', placeholder='Snowflurry', disabled=inputsDisabled)
+  st.selectbox('Iterate by', ('File', 'Query'), key='IterateBy', help='Run the file as a batch, or individual SQLs', disabled=inputsDisabled)
   st.number_input('Iterations', min_value=0, key='Iterations', help='Total iterations to run, to simulate concurrency', disabled=inputsDisabled)
   st.text_input('Sql File', key='SqlFile', help='File containing SQL statements to be executed, from the ./scripts PATH', placeholder='snowflurry.sql', disabled=inputsDisabled)
   executeMain = st.button('Execute', disabled=inputsDisabled, on_click=DisableInputs)
