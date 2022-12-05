@@ -123,6 +123,8 @@ def TestConnection():
   st.session_state['connection'] = 'Connection Succeeded'
 
 def ExecuteMain(con):
+ if (DEBUG):
+  print('ExecuteMain')
  ClearDataFrame()
  args = st.session_state
  warehouse = args['Warehouse']
@@ -163,8 +165,11 @@ def ConfigureWarehouse(con, warehouse):
   cur = con.cursor()
   cur.execute('ALTER SESSION UNSET QUERY_TAG')
   SuspendWarehouse(con, warehouse)
+  if (DEBUG):
+   print(args)
   alterStatement = f'ALTER WAREHOUSE {warehouse} SET WAREHOUSE_SIZE = {args["WarehouseSize"]} MIN_CLUSTER_COUNT = {min(args["Mcw"])} MAX_CLUSTER_COUNT = {max(args["Mcw"])} MAX_CONCURRENCY_LEVEL = {args["MaxConcurrencyLevel"]}'
-  print(alterStatement)
+  if (DEBUG):
+   print(alterStatement)
   cur.execute(alterStatement)
   timeString = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
   queryTag = f'{timeString}_{args["Iterations"]}_{args["WarehouseSize"]}_{min(args["Mcw"])}_{max(args["Mcw"])}_{args["MaxConcurrencyLevel"]}_{"RC_" if args["ResultSetCache"] else ""}{args["QueryTag"]}'
@@ -192,11 +197,17 @@ def SuspendWarehouse(con, warehouse):
     raise
 
 def ExecuteQueries(con, sqlList):
+ if (DEBUG):
+  print('ExecuteQueries')
  queryIdList = []
  cur = con.cursor()
 
  progressBar = st.progress(0)
+ if (DEBUG):
+  print('sqlList: ' + str(sqlList))
  for sql in sqlList:
+  if (DEBUG):
+    print(sql)
   cur.execute_async(sql)
   queryIdList.append(cur.sfqid)
  

@@ -1,0 +1,10 @@
+#pip install -r requirements.txt
+cryptography==36.0.2
+matplotlib==3.5.2
+pandas==1.4.2
+seaborn==0.11.2
+snowflake==0.0.3
+snowflake_connector_python==2.7.9
+streamlit==1.12.0
+toml==0.10.2
+streamlit-aggrid==0.1.9
